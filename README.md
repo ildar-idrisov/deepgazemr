@@ -41,20 +41,24 @@ video = video.to(device)
 ```
 
 There are two ways how to use *DeepGaze MR* for predicting human gaze. The
-`forward` method expects a clip of 16 frames and returns the predicted
-probability distribution for human gaze on the last frame in the window:
+`forward` method expects a single clip of 16 frames (*T x C x H x W*; batches
+of clips are not supported) and returns the predicted **log-density** (natural
+log) of human gaze on the last frame in the window. The prediction is
+normalized, i.e. `prediction.exp()` is a probability distribution that sums to
+1:
 
 ```python
 clip = video[0:16]
-prediction = model.forward(clip)
-print(prediction.shape)  # e.g. [360, 640], matching the input resolution
+log_density = model.forward(clip)
+print(log_density.shape)  # e.g. [360, 640], matching the input resolution
+density = log_density.exp()  # probability distribution over pixels
 ```
 
 The `predict` method is used to predict gaze for full videos. This method is
 optimized to not compute features for the same frame multiple times when
 shifting the window. So it is much faster than naively using `forward` for all
-windows. The `predict` method returns an iterator over all predictions for
-the input video. Due to the windowed approach, the predictions for the first 15
+windows. The `predict` method returns an iterator over all predictions
+(log-densities, as for `forward`) for the input video. Due to the windowed approach, the predictions for the first 15
 frames will be `None`.
 
 ```python
@@ -62,6 +66,12 @@ for i, prediction in enumerate(model.predict(video)):
   if prediction is not None:
     # do something with the prediction for frame i
 ```
+
+The model is not scale invariant: the final gaussian blur has a fixed size of
+about 16 pixels of the output (= input) resolution and the VGG features depend
+on the input resolution as well. Predictions for the same video therefore
+change with the resolution it is passed in. The bundled LEDOV center bias has
+a resolution of 720 x 1280 and is rescaled to the input resolution.
 
 When transferring *DeepGaze MR* to different datasets than LEDOV, you have to
 provide the correct center bias for that dataset (even when using the
@@ -86,6 +96,11 @@ prediction = model.forward(clip, center_bias=center_bias)
 
 iterator = model.predict(video, center_bias=center_bias)
 ```
+
+
+## Tests
+The tests run with `python -m pytest tests` (requires pytest) and use the
+bundled checkpoint, no download needed.
 
 
 ## Meta-Benchmark

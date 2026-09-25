@@ -19,8 +19,9 @@ class DeepGazeMR(nn.Module):
         self._window_length = 16
 
     def forward(self, clip, center_bias=None):
+        _check_video(clip, 'clip')
         center_bias = self._adapt_center_bias(clip.shape[-2:], center_bias)
-        center_bias = center_bias.to(clip.device)
+        center_bias = center_bias.to(device=clip.device, dtype=clip.dtype)
 
         features = self.features(clip)
         priority_map = self.readout(features)
@@ -28,8 +29,9 @@ class DeepGazeMR(nn.Module):
         return prediction
 
     def predict(self, video, center_bias=None):
+        _check_video(video, 'video')
         center_bias = self._adapt_center_bias(video.shape[-2:], center_bias)
-        center_bias = center_bias.to(video.device)
+        center_bias = center_bias.to(device=video.device, dtype=video.dtype)
 
         buffer = None
         buffer_index = 0
@@ -69,6 +71,13 @@ class DeepGazeMR(nn.Module):
             center_bias /= center_bias.sum()
 
         return center_bias.log()
+
+
+def _check_video(frames, name):
+    # the readout averages over dim 0 (time), so a batch of clips would silently be merged
+    if frames.dim() != 4 or frames.shape[1] != 3:
+        raise ValueError(
+            f"{name} must be a single video of shape T x 3 x H x W, got {tuple(frames.shape)}")
 
 
 class _Backbone(nn.Module):
